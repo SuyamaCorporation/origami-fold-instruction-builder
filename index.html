@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Origami Fold Instruction Builder</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body { background: white; }
+    .print-page { page-break-after: always; }
+    .step-card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="bg-amber-50 min-h-screen">
+<div class="max-w-4xl mx-auto px-4 py-8">
+  <div class="no-print">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="text-3xl" aria-hidden="true">🦢</span>
+      <h1 class="text-3xl font-bold text-gray-800">Origami Fold Instruction Builder</h1>
+    </div>
+    <p class="text-gray-500 mb-6 ml-12">折り紙の折り方をステップごとにSVG図と一緒に表示します</p>
+
+    <!-- モデル選択 -->
+    <div class="bg-white rounded-2xl shadow p-4 mb-6">
+      <h2 class="text-sm font-semibold text-gray-600 mb-3">折り紙モデルを選択</h2>
+      <div id="modelSelector" class="grid grid-cols-4 sm:grid-cols-8 gap-2"></div>
+    </div>
+  </div>
+
+  <!-- タイトル（印刷用） -->
+  <div id="modelTitle" class="text-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800"></h2>
+    <p id="modelDesc" class="text-gray-500 text-sm mt-1"></p>
+  </div>
+
+  <!-- ナビゲーション -->
+  <div class="no-print flex items-center justify-between bg-white rounded-2xl shadow px-6 py-3 mb-4">
+    <button id="prevBtn" onclick="prevStep()" class="flex items-center gap-2 text-gray-600 hover:text-amber-600 font-semibold disabled:opacity-30 transition" aria-label="前のステップ" disabled>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      前へ
+    </button>
+    <div class="text-center">
+      <span id="stepCounter" class="font-bold text-amber-600 text-lg"></span>
+    </div>
+    <button id="nextBtn" onclick="nextStep()" class="flex items-center gap-2 text-gray-600 hover:text-amber-600 font-semibold transition" aria-label="次のステップ">
+      次へ
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  </div>
+
+  <!-- ステップ表示 (1ステップ表示モード) -->
+  <div id="singleStep" class="no-print bg-white rounded-2xl shadow p-6 mb-4 step-card">
+    <div id="stepSvg" class="flex justify-center mb-4"></div>
+    <div id="stepText" class="text-center text-gray-700 text-lg font-medium"></div>
+    <div id="stepTip" class="text-center text-gray-400 text-sm mt-2"></div>
+  </div>
+
+  <!-- 全ステップ（印刷用） -->
+  <div id="allSteps" class="hidden print-page">
+    <div id="allStepsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+  </div>
+
+  <div class="no-print flex gap-3 justify-center">
+    <button onclick="showAll()" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-6 py-2 rounded-xl transition" aria-label="全ステップ表示">全ステップ表示</button>
+    <button onclick="window.print()" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-2 rounded-xl transition" aria-label="印刷">印刷</button>
+  </div>
+</div>
+
+<script>
+const MODELS = {
+  Crane: {
+    emoji: '🦅',
+    desc: '鶴（つる）- 折り紙の代名詞',
+    steps: [
+      { text: '色のついた面を下にして正方形の紙を置く', tip: '対角線で2回折り、十字形の折り目をつける', svg: 'square' },
+      { text: '四隅を中心に向けて折る（座布団折り）', tip: 'すべての角が中心で合うように丁寧に', svg: 'cushion' },
+      { text: '裏返して、もう一度四隅を中心に折る', tip: '同様に四隅を中心に', svg: 'cushion2' },
+      { text: '上下の角を中心線に合わせて折り上げる', tip: '鶴の胴体の形ができます', svg: 'fold_up' },
+      { text: '左右の角を山折りにして立体にする', tip: '対称になるように', svg: 'fold_sides' },
+      { text: '首と尾を引き出して形を整える', tip: 'ゆっくり丁寧に引き出す', svg: 'pull_out' },
+      { text: '首の先を内側に折り込んでくちばしを作る', tip: '内側折り（中割り折り）', svg: 'beak' },
+      { text: '羽を左右に広げて完成', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Box: {
+    emoji: '📦',
+    desc: '箱 - 実用的な小物入れ',
+    steps: [
+      { text: '正方形を対角線で折り目をつけ、広げる', tip: '縦横2方向に折り目', svg: 'square' },
+      { text: '4辺を中心線に向けて折る', tip: '正方形が小さくなります', svg: 'cushion' },
+      { text: '上下の辺を中心に向けて折る', tip: '長方形になります', svg: 'fold_up' },
+      { text: '上下を広げ、左右を折り上げる', tip: '箱の側面ができます', svg: 'fold_sides' },
+      { text: '三角形の部分を折り込んで内側に入れる', tip: '角を丁寧に処理', svg: 'beak' },
+      { text: '反対側も同様に折って箱を完成させる', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Boat: {
+    emoji: '⛵',
+    desc: 'ボート - 水に浮かべよう',
+    steps: [
+      { text: '長方形に半分に折る', tip: '横長の長方形になります', svg: 'square' },
+      { text: '両上角を下の辺に向けて三角に折る', tip: '帽子の形になります', svg: 'fold_up' },
+      { text: '下の辺を上に向けて折り上げる（表裏）', tip: '両面とも折り上げます', svg: 'fold_sides' },
+      { text: '帽子の左右の角を持って広げる', tip: 'ゆっくり引き出す', svg: 'pull_out' },
+      { text: '下の角を上に折り上げて正方形にする', tip: '前後同様に', svg: 'cushion' },
+      { text: 'もう一度広げてボートを立体にする', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Frog: {
+    emoji: '🐸',
+    desc: 'カエル - 押すと跳ねる！',
+    steps: [
+      { text: '正方形を縦横・対角線で折り目をつける', tip: '6本の折り目が入ります', svg: 'square' },
+      { text: '折り目に合わせて三角形に折り畳む', tip: '風船の基本形', svg: 'cushion' },
+      { text: '三角の両角を頂点に合わせて折り上げる', tip: 'ひし形になります', svg: 'fold_up' },
+      { text: '左右の端を中心線に合わせて折る', tip: '足の形ができます', svg: 'fold_sides' },
+      { text: '上部の角を下に折り下げる', tip: '頭の部分', svg: 'beak' },
+      { text: '裏返して後ろ足を折り曲げる', tip: 'カエルらしい後ろ足', svg: 'pull_out' },
+      { text: 'お尻を押すと跳ねます！', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Butterfly: {
+    emoji: '🦋',
+    desc: 'チョウ - 美しい羽',
+    steps: [
+      { text: '正方形を対角線で折り、開く', tip: '両方向に折り目をつける', svg: 'square' },
+      { text: '4角を中心に折る（座布団折り）', tip: 'コンパクトになります', svg: 'cushion' },
+      { text: '裏返して上下を中心に折る', tip: '長方形になります', svg: 'fold_up' },
+      { text: '中央の折り目で谷折りにして半分にする', tip: '山折りで折りたたむ', svg: 'fold_sides' },
+      { text: '上の角を引き出して羽を広げる', tip: '左右対称に', svg: 'pull_out' },
+      { text: '中央をつまんで羽を整える', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Flower: {
+    emoji: '🌸',
+    desc: 'お花 - 立体的な花',
+    steps: [
+      { text: '正方形を十字に折り目をつける', tip: '縦横半分に折る', svg: 'square' },
+      { text: '4角を中心に折る', tip: '座布団折り', svg: 'cushion' },
+      { text: '裏返して4角をまた中心に折る', tip: '2回目の座布団折り', svg: 'cushion2' },
+      { text: '3回目も同様に4角を中心に折る', tip: '小さくなります', svg: 'fold_up' },
+      { text: '裏返して花びらの角を引き出す', tip: '4枚の花びら', svg: 'pull_out' },
+      { text: '花びらを丸めて立体的にする', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Star: {
+    emoji: '⭐',
+    desc: '星 - 幸運の五角星',
+    steps: [
+      { text: '細長い紙を用意して端を五角形に折る', tip: '長さ: 幅の10倍程度', svg: 'square' },
+      { text: '五角形の結び目を作る', tip: '平らに押しつぶす', svg: 'fold_up' },
+      { text: '余った紙を折り目に沿って巻いていく', tip: '同じ方向に巻く', svg: 'fold_sides' },
+      { text: '端を差し込んでとめる', tip: 'はみ出た部分を内側へ', svg: 'beak' },
+      { text: '5つの角をつまんで立体にする', tip: '爪で丁寧にへこませる', svg: 'pull_out' },
+      { text: '星型の完成', tip: '完成！', svg: 'final' },
+    ]
+  },
+  Fox: {
+    emoji: '🦊',
+    desc: 'キツネ - かわいい顔折り',
+    steps: [
+      { text: '正方形の紙を対角線で三角に折る', tip: '色のついた面を内側に', svg: 'square' },
+      { text: '底辺の両角を頂点に向けて折り上げる', tip: '耳になります', svg: 'fold_up' },
+      { text: '左右の角を少し折り下げて耳を作る', tip: 'キツネの耳の形', svg: 'fold_sides' },
+      { text: '下の角を上に折り上げてかおを形成', tip: '鼻の先になります', svg: 'beak' },
+      { text: '鼻先を少し折り戻す', tip: '丸みをつける', svg: 'pull_out' },
+      { text: '目と口を描いて完成', tip: '完成！', svg: 'final' },
+    ]
+  }
+};
+
+const SVG_DIAGRAMS = {
+  square: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <rect x="20" y="20" width="120" height="120" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <line x1="80" y1="20" x2="80" y2="140" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="20" y1="80" x2="140" y2="80" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="20" y1="20" x2="140" y2="140" stroke="#92400E" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="140" y1="20" x2="20" y2="140" stroke="#92400E" stroke-width="1" stroke-dasharray="4,3"/>
+  </svg>`,
+  cushion: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,20 140,80 80,140 20,80" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <line x1="80" y1="20" x2="80" y2="140" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="20" y1="80" x2="140" y2="80" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+    <circle cx="80" cy="80" r="4" fill="#D97706"/>
+  </svg>`,
+  cushion2: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,30 130,80 80,130 30,80" fill="#FDE68A" stroke="#D97706" stroke-width="2"/>
+    <polygon points="80,50 110,80 80,110 50,80" fill="#FEF3C7" stroke="#92400E" stroke-width="1"/>
+    <circle cx="80" cy="80" r="3" fill="#92400E"/>
+  </svg>`,
+  fold_up: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <rect x="30" y="70" width="100" height="50" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <rect x="30" y="40" width="100" height="30" fill="#FDE68A" stroke="#D97706" stroke-width="1"/>
+    <path d="M 30 70 Q 80 55 130 70" stroke="#D97706" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
+    <polygon points="80,42 86,54 74,54" fill="#D97706"/>
+  </svg>`,
+  fold_sides: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,20 130,90 30,90" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <line x1="30" y1="90" x2="30" y2="140" stroke="#D97706" stroke-width="2"/>
+    <line x1="130" y1="90" x2="130" y2="140" stroke="#D97706" stroke-width="2"/>
+    <line x1="30" y1="140" x2="130" y2="140" stroke="#D97706" stroke-width="2"/>
+    <path d="M 30 90 L 50 110" stroke="#92400E" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <path d="M 130 90 L 110 110" stroke="#92400E" stroke-width="1.5" stroke-dasharray="4,3"/>
+  </svg>`,
+  pull_out: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,30 130,100 30,100" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <polygon points="80,100 60,130 100,130" fill="#FDE68A" stroke="#D97706" stroke-width="2"/>
+    <line x1="80" y1="30" x2="80" y2="130" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+    <polygon points="80,25 84,37 76,37" fill="#D97706"/>
+  </svg>`,
+  beak: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,30 110,90 80,80 50,90" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+    <polygon points="80,80 90,110 70,110" fill="#FDE68A" stroke="#D97706" stroke-width="2"/>
+    <path d="M 80 80 L 80 110" stroke="#92400E" stroke-width="2" stroke-dasharray="3,2"/>
+    <circle cx="70" cy="55" r="4" fill="#374151"/>
+    <circle cx="90" cy="55" r="4" fill="#374151"/>
+  </svg>`,
+  final: `<svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="80,20 140,60 120,130 40,130 20,60" fill="#FDE68A" stroke="#D97706" stroke-width="2"/>
+    <polygon points="80,20 100,60 80,55 60,60" fill="#FEF3C7" stroke="#D97706" stroke-width="1"/>
+    <text x="80" y="100" text-anchor="middle" font-size="32" font-family="serif">✓</text>
+    <text x="80" y="155" text-anchor="middle" font-size="11" fill="#D97706" font-weight="bold">完成！</text>
+  </svg>`
+};
+
+let currentModel = 'Crane';
+let currentStep = 0;
+
+function renderModelSelector() {
+  const sel = document.getElementById('modelSelector');
+  sel.innerHTML = '';
+  for (const [name, data] of Object.entries(MODELS)) {
+    const btn = document.createElement('button');
+    btn.className = 'flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition ' + (name === currentModel ? 'border-amber-400 bg-amber-50' : 'border-gray-100 hover:border-amber-200');
+    btn.setAttribute('aria-label', name);
+    btn.setAttribute('aria-pressed', name === currentModel ? 'true' : 'false');
+    const emoji = document.createElement('span');
+    emoji.textContent = data.emoji;
+    emoji.className = 'text-2xl';
+    const label = document.createElement('span');
+    label.textContent = name;
+    label.className = 'text-xs text-gray-600';
+    btn.appendChild(emoji); btn.appendChild(label);
+    btn.onclick = () => selectModel(name);
+    sel.appendChild(btn);
+  }
+}
+
+function selectModel(name) {
+  currentModel = name;
+  currentStep = 0;
+  document.getElementById('allSteps').classList.add('hidden');
+  document.getElementById('singleStep').classList.remove('hidden');
+  renderModelSelector();
+  renderStep();
+}
+
+function renderStep() {
+  const model = MODELS[currentModel];
+  const step = model.steps[currentStep];
+  const total = model.steps.length;
+
+  document.querySelector('#modelTitle h2').textContent = MODELS[currentModel].emoji + ' ' + currentModel;
+  document.getElementById('modelDesc').textContent = model.desc;
+  document.getElementById('stepCounter').textContent = 'Step ' + (currentStep + 1) + ' / ' + total;
+
+  const svgDiv = document.getElementById('stepSvg');
+  svgDiv.innerHTML = SVG_DIAGRAMS[step.svg] || SVG_DIAGRAMS['square'];
+
+  const textEl = document.getElementById('stepText');
+  textEl.textContent = 'Step ' + (currentStep + 1) + ': ' + step.text;
+  const tipEl = document.getElementById('stepTip');
+  tipEl.textContent = step.tip ? '💡 ' + step.tip : '';
+
+  document.getElementById('prevBtn').disabled = currentStep === 0;
+  document.getElementById('nextBtn').disabled = currentStep === total - 1;
+}
+
+function prevStep() { if (currentStep > 0) { currentStep--; renderStep(); } }
+function nextStep() { if (currentStep < MODELS[currentModel].steps.length - 1) { currentStep++; renderStep(); } }
+
+function showAll() {
+  const allSteps = document.getElementById('allSteps');
+  const singleStep = document.getElementById('singleStep');
+  allSteps.classList.remove('hidden');
+  singleStep.classList.add('hidden');
+
+  const grid = document.getElementById('allStepsGrid');
+  grid.innerHTML = '';
+  const model = MODELS[currentModel];
+  model.steps.forEach((step, i) => {
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-xl shadow p-3 step-card';
+    const svgDiv = document.createElement('div');
+    svgDiv.className = 'flex justify-center mb-2';
+    svgDiv.innerHTML = SVG_DIAGRAMS[step.svg] || SVG_DIAGRAMS['square'];
+    // Scale SVG down
+    svgDiv.querySelector('svg').setAttribute('width', '100');
+    svgDiv.querySelector('svg').setAttribute('height', '100');
+    const stepNum = document.createElement('div');
+    stepNum.className = 'text-xs font-bold text-amber-600 mb-1';
+    stepNum.textContent = 'Step ' + (i + 1);
+    const text = document.createElement('div');
+    text.className = 'text-xs text-gray-700';
+    text.textContent = step.text;
+    card.appendChild(svgDiv); card.appendChild(stepNum); card.appendChild(text);
+    grid.appendChild(card);
+  });
+}
+
+renderModelSelector();
+renderStep();
+</script>
+</body>
+</html>
